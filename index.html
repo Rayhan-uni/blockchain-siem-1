@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainSIEM — Blockchain Security Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0e14;
+    --panel: #10161f;
+    --panel-2: #141c28;
+    --line: #223042;
+    --line-soft: #1a2432;
+    --text: #dfe8f2;
+    --text-dim: #7f93ab;
+    --text-faint: #4d5f75;
+    --ledger: #8b7cf6;
+    --ledger-dim: #4a4184;
+    --ok: #29d9b8;
+    --warn: #f0a94e;
+    --high: #ff8a5c;
+    --crit: #ff5470;
+    --crit-glow: rgba(255,84,112,0.35);
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(139,124,246,0.08), transparent 60%),
+      radial-gradient(900px 500px at 90% 0%, rgba(41,217,184,0.06), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+  ::selection{ background: var(--ledger-dim); }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 28px; border-bottom: 1px solid var(--line);
+    background: rgba(10,14,20,0.9); position: sticky; top:0; z-index: 50;
+    backdrop-filter: blur(8px);
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand .mark{
+    width:34px; height:34px; border-radius:8px;
+    background: linear-gradient(135deg, var(--ledger), #5940c9);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--mono); font-weight:700; font-size:15px; color:#0a0e14;
+    box-shadow: 0 0 22px rgba(139,124,246,0.35);
+  }
+  .brand h1{ font-size:16px; font-weight:600; letter-spacing:0.02em; }
+  .brand .sub{ font-family: var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.04em;}
+  .status-row{ display:flex; align-items:center; gap:18px; }
+  .status-pill{
+    display:flex; align-items:center; gap:7px; font-family: var(--mono); font-size:12px;
+    padding:6px 12px; border-radius:20px; border:1px solid var(--line); background: var(--panel);
+  }
+  .dot{ width:7px; height:7px; border-radius:50%; }
+  .dot.ok{ background: var(--ok); box-shadow:0 0 8px var(--ok); }
+  .dot.bad{ background: var(--crit); box-shadow:0 0 8px var(--crit); animation: pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .controls{ display:flex; gap:8px; }
+  button{
+    font-family: var(--sans); font-size:12.5px; font-weight:600; letter-spacing:0.01em;
+    border:1px solid var(--line); background: var(--panel-2); color: var(--text);
+    padding:9px 14px; border-radius:8px; cursor:pointer; transition: all .15s ease;
+  }
+  button:hover{ border-color: var(--ledger); color:#fff; transform: translateY(-1px); }
+  button:active{ transform: translateY(0); }
+  button.primary{ background: linear-gradient(135deg, var(--ledger), #5940c9); border:none; color:#0a0e14; font-weight:700;}
+  button.primary:hover{ box-shadow: 0 4px 18px rgba(139,124,246,0.4); }
+  button.danger{ border-color: rgba(255,84,112,0.4); color: var(--crit); }
+  button.danger:hover{ border-color: var(--crit); background: rgba(255,84,112,0.08); }
+  button.small{ padding:5px 10px; font-size:11px; }
+  button.toggled{ background: var(--ok); color:#0a0e14; border-color: var(--ok); }
+
+  main{ max-width: 1400px; margin: 0 auto; padding: 22px 28px; }
+
+  /* ---------- ledger ribbon (signature element) ---------- */
+  .ledger-wrap{
+    background: var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding: 18px 20px 20px; margin-bottom:22px; overflow:hidden;
+  }
+  .ledger-title{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .ledger-title h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); font-weight:600;}
+  .ledger-title .meta{ font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+  .ribbon{
+    display:flex; align-items:stretch; gap:0; overflow-x:auto; padding-bottom:6px;
+    scrollbar-width: thin;
+  }
+  .ribbon::-webkit-scrollbar{ height:6px; }
+  .ribbon::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
+  .block-card{
+    min-width:150px; background: var(--panel-2); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; margin-right:0; position:relative; flex-shrink:0;
+  }
+  .block-card.genesis{ border-color: var(--ledger-dim); }
+  .block-card.broken{ border-color: var(--crit); box-shadow: 0 0 0 1px var(--crit), 0 0 16px var(--crit-glow); }
+  .block-idx{ font-family:var(--mono); font-size:10px; color:var(--ledger); font-weight:600; letter-spacing:0.05em; margin-bottom:6px;}
+  .block-hash{ font-family:var(--mono); font-size:11px; color:var(--text-dim); word-break:break-all; line-height:1.5;}
+  .block-count{ margin-top:8px; font-family:var(--mono); font-size:10px; color:var(--text-faint);}
+  .link-line{
+    width:26px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  }
+  .link-line svg{ width:100%; }
+  .link-line.broken svg path{ stroke: var(--crit); }
+
+  /* ---------- grid ---------- */
+  .grid{ display:grid; grid-template-columns: 1fr 380px; gap:22px; }
+  @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
+
+  .panel{ background: var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .panel-head{
+    display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .panel-head h2{ font-size:13px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); font-weight:600;}
+  .panel-head .count{ font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+
+  /* ---------- log stream ---------- */
+  .log-stream{ max-height: 560px; overflow-y:auto; }
+  .log-row{
+    display:grid; grid-template-columns: 84px 96px 110px 1fr 90px;
+    gap:10px; align-items:center; padding:10px 18px; border-bottom:1px solid var(--line-soft);
+    font-size:12.5px; transition: background .15s;
+  }
+  .log-row:hover{ background: rgba(139,124,246,0.04); }
+  .log-row .t{ font-family:var(--mono); color:var(--text-faint); font-size:11px;}
+  .log-row .dev{ font-family:var(--mono); color:var(--text-dim); font-size:11.5px;}
+  .badge{
+    display:inline-flex; align-items:center; padding:3px 8px; border-radius:5px;
+    font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:0.03em; text-transform:uppercase;
+    width: fit-content;
+  }
+  .badge.info{ background: rgba(41,217,184,0.12); color: var(--ok); }
+  .badge.medium{ background: rgba(240,169,78,0.14); color: var(--warn); }
+  .badge.high{ background: rgba(255,138,92,0.14); color: var(--high); }
+  .badge.critical{ background: rgba(255,84,112,0.15); color: var(--crit); }
+  .log-row .msg{ color: var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .log-row .msg.tampered{ color: var(--crit); }
+  .row-actions{ display:flex; gap:6px; justify-content:flex-end; }
+
+  .empty{ padding:40px 20px; text-align:center; color:var(--text-faint); font-size:13px; }
+
+  /* ---------- incidents ---------- */
+  .incident{ padding:13px 18px; border-bottom:1px solid var(--line-soft); }
+  .incident-top{ display:flex; align-items:center; justify-content:between; gap:8px; margin-bottom:5px;}
+  .incident-type{ font-size:12.5px; font-weight:600; flex:1; }
+  .incident-mitre{ font-family:var(--mono); font-size:10.5px; color: var(--ledger); margin-bottom:4px;}
+  .incident-meta{ font-family:var(--mono); font-size:10.5px; color:var(--text-faint); display:flex; gap:10px;}
+
+  /* ---------- stats ---------- */
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background: var(--line); }
+  .stat-box{ background: var(--panel); padding:16px 18px; }
+  .stat-num{ font-family:var(--mono); font-size:22px; font-weight:700; }
+  .stat-label{ font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-top:2px;}
+  .sev-bars{ padding: 14px 18px 18px; }
+  .sev-bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px;}
+  .sev-bar-row .lbl{ width:56px; font-family:var(--mono); color:var(--text-dim); text-transform:uppercase; font-size:10px;}
+  .sev-bar-track{ flex:1; height:6px; background: var(--panel-2); border-radius:4px; overflow:hidden;}
+  .sev-bar-fill{ height:100%; border-radius:4px; }
+  .sev-bar-row .n{ font-family:var(--mono); color:var(--text-faint); width:28px; text-align:right; font-size:10.5px;}
+
+  /* ---------- verify modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(5,7,11,0.75); backdrop-filter: blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .overlay.show{ display:flex; }
+  .modal{
+    background: var(--panel); border:1px solid var(--line); border-radius:14px; max-width:560px; width:100%;
+    padding:24px; max-height:85vh; overflow-y:auto;
+  }
+  .modal h3{ font-size:15px; margin-bottom:4px; }
+  .modal .sub{ font-family:var(--mono); font-size:11px; color:var(--text-faint); margin-bottom:18px;}
+  .verdict-banner{
+    padding:14px 16px; border-radius:10px; font-weight:700; font-size:13.5px; margin-bottom:18px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .verdict-banner.pass{ background: rgba(41,217,184,0.12); color: var(--ok); border:1px solid rgba(41,217,184,0.3);}
+  .verdict-banner.fail{ background: rgba(255,84,112,0.12); color: var(--crit); border:1px solid rgba(255,84,112,0.35);}
+  .kv{ display:grid; grid-template-columns: 150px 1fr; gap:8px 12px; font-size:12px; margin-bottom:6px; }
+  .kv .k{ color: var(--text-dim); }
+  .kv .v{ font-family:var(--mono); color:var(--text); word-break:break-all; font-size:11.5px;}
+  .kv .v.match{ color: var(--ok); }
+  .kv .v.mismatch{ color: var(--crit); }
+  .modal-actions{ margin-top:20px; display:flex; gap:8px; justify-content:flex-end; }
+  .close-x{ position:absolute; top:16px; right:18px; cursor:pointer; color:var(--text-faint); font-size:18px; background:none; border:none; padding:4px;}
+
+  .footer-note{ text-align:center; margin-top:30px; font-family:var(--mono); font-size:11px; color: var(--text-faint); }
+  .footer-note a{ color: var(--ledger); text-decoration:none; }
+
+  .toast-wrap{ position: fixed; bottom: 20px; right: 20px; z-index: 200; display:flex; flex-direction:column; gap:8px; }
+  .toast{
+    background: var(--panel-2); border:1px solid var(--line); border-left:3px solid var(--ledger);
+    padding:11px 16px; border-radius:8px; font-size:12.5px; max-width:340px;
+    animation: slidein .2s ease;
+  }
+  .toast.crit{ border-left-color: var(--crit); }
+  @keyframes slidein{ from{opacity:0; transform: translateX(20px);} to{opacity:1; transform: translateX(0);} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark">⛓</div>
+    <div>
+      <h1>ChainSIEM</h1>
+      <div class="sub">Blockchain-Anchored Security Log Integrity</div>
+    </div>
+  </div>
+  <div class="status-row">
+    <div class="status-pill"><span class="dot ok" id="chain-dot"></span><span id="chain-status-text">chain verifying…</span></div>
+    <div class="status-pill">⛃ <span id="block-count">0</span> blocks</div>
+    <div class="status-pill">◎ <span id="pending-count">0</span> pending</div>
+    <div class="controls">
+      <button class="small" id="btn-auto">▶ Auto-generate traffic</button>
+      <button class="primary small" id="btn-ingest">+ Generate batch</button>
+      <button class="small" id="btn-mine">Force-mine block</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <div class="ledger-wrap">
+    <div class="ledger-title">
+      <h2>Immutable Ledger — Hash-Chained Blocks</h2>
+      <div class="meta" id="ledger-meta">genesis → latest</div>
+    </div>
+    <div class="ribbon" id="ribbon"></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Live Log Stream</h2>
+        <div class="count"><span id="log-count">0</span> total logs</div>
+      </div>
+      <div class="log-stream" id="log-stream">
+        <div class="empty">No logs yet. Click "Generate batch" to ingest simulated traffic.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:22px;">
+      <div class="panel">
+        <div class="panel-head"><h2>System Status</h2></div>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="stat-num" id="stat-logs">0</div><div class="stat-label">Total Logs</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-blocks">0</div><div class="stat-label">Blocks Mined</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-incidents" style="color:var(--crit)">0</div><div class="stat-label">Open Incidents</div></div>
+          <div class="stat-box"><div class="stat-num" id="stat-devices">0</div><div class="stat-label">Devices</div></div>
+        </div>
+        <div class="sev-bars" id="sev-bars"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>AI-Flagged Incidents</h2>
+          <div class="count"><span id="incident-count">0</span></div>
+        </div>
+        <div id="incidents-list"><div class="empty">No incidents yet.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">Every log's SHA-256 hash is committed to a locally-mined hash-chain block. Click <span style="color:var(--text-dim)">Verify</span> on any log to re-hash it and check it against the ledger. Try <span style="color:var(--crit)">Tamper</span> to see detection in action.</div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal" style="position:relative;">
+    <button class="close-x" id="modal-close">✕</button>
+    <h3>Log Integrity Verification</h3>
+    <div class="sub" id="modal-sub">log #—</div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+// Keep the browser on the Vercel origin. /api/* is forwarded by the Vercel
+// serverless proxy to the Flask backend configured with BACKEND_URL.
+const API = "";
+let autoTimer = null;
+
+function fmtTime(ts){
+  const d = new Date(ts*1000);
+  return d.toLocaleTimeString('en-GB', {hour12:false});
+}
+function shortHash(h, n=14){ return h ? (h.slice(0,n) + '…') : ''; }
+function toast(msg, crit=false){
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast' + (crit ? ' crit' : '');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(()=> el.remove(), 5000);
+}
+
+async function api(path, opts = {}){
+  try {
+    const res = await fetch(API + path, {
+      ...opts,
+      headers: {
+        ...(opts.body ? {'Content-Type':'application/json'} : {}),
+        ...(opts.headers || {})
+      }
+    });
+
+    const text = await res.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; }
+    catch { data = { error: text || `HTTP ${res.status}` }; }
+
+    if (!res.ok) {
+      const message = data.message || data.error || `HTTP ${res.status}`;
+      throw new Error(message);
+    }
+    return data;
+  } catch (err) {
+    console.error(`[ChainSIEM API] ${path}`, err);
+    toast(`API error: ${err.message}`, true);
+    throw err;
+  }
+}
+
+async function ingestBatch(attackProb=0.3){
+  const r = await api('/api/ingest/simulate', {
+    method:'POST',
+    body: JSON.stringify({n_normal:6, attack_probability: attackProb})
+  });
+  if(r.new_incidents && r.new_incidents.length){
+    r.new_incidents.forEach(i => toast(`⚠ ${i.attack_type} detected on ${i.device}`, true));
+  }
+  await refreshAll();
+}
+
+async function forceMine(){
+  const r = await api('/api/mine', {method:'POST'});
+  if(r.mined){ toast(`Block #${r.block.index} mined (${r.block.log_hashes.length} logs committed)`); }
+  else { toast('No pending logs to mine.'); }
+  await refreshAll();
+}
+
+async function refreshLedger(){
+  const chain = await api('/api/blockchain');
+  const validation = await api('/api/blockchain/validate');
+  const ribbon = document.getElementById('ribbon');
+  ribbon.innerHTML = '';
+  chain.forEach((b, i) => {
+    if(i > 0){
+      const brokenLink = validation.broken_block_indices.includes(b.index);
+      const link = document.createElement('div');
+      link.className = 'link-line' + (brokenLink ? ' broken' : '');
+      link.innerHTML = `<svg height="2" viewBox="0 0 26 2"><path d="M0 1 H26" stroke="${brokenLink ? '#ff5470':'#2a3a4f'}" stroke-width="2" stroke-dasharray="${brokenLink?'3,2':'0'}"/></svg>`;
+      ribbon.appendChild(link);
+    }
+    const card = document.createElement('div');
+    const isBroken = validation.broken_block_indices.includes(b.index);
+    card.className = 'block-card' + (b.index===0 ? ' genesis' : '') + (isBroken ? ' broken' : '');
+    card.innerHTML = `
+      <div class="block-idx">${b.index===0?'GENESIS':'BLOCK #'+b.index}</div>
+      <div class="block-hash">${shortHash(b.hash, 16)}</div>
+      <div class="block-count">${b.log_hashes.length} log${b.log_hashes.length!==1?'s':''} · nonce ${b.nonce}</div>
+    `;
+    ribbon.appendChild(card);
+  });
+  ribbon.scrollLeft = ribbon.scrollWidth;
+  document.getElementById('ledger-meta').textContent = `${chain.length} block${chain.length!==1?'s':''} · ${validation.valid ? 'chain intact' : validation.broken_block_indices.length + ' block(s) broken'}`;
+
+  const dot = document.getElementById('chain-dot');
+  const txt = document.getElementById('chain-status-text');
+  if(validation.valid){ dot.className='dot ok'; txt.textContent='chain verified'; }
+  else { dot.className='dot bad'; txt.textContent='INTEGRITY BROKEN'; }
+  document.getElementById('block-count').textContent = chain.length;
+}
+
+const SEV_COLOR = {info:'var(--ok)', low:'var(--ok)', medium:'var(--warn)', high:'var(--high)', critical:'var(--crit)'};
+
+async function refreshLogs(){
+  const logs = await api('/api/logs?limit=60');
+  const stream = document.getElementById('log-stream');
+  document.getElementById('log-count').textContent = logs.length;
+  if(!logs.length){ stream.innerHTML = '<div class="empty">No logs yet. Click "Generate batch" to ingest simulated traffic.</div>'; return; }
+  stream.innerHTML = logs.map(l => `
+    <div class="log-row">
+      <div class="t">${fmtTime(l.timestamp)}</div>
+      <div class="dev">${l.device}</div>
+      <div><span class="badge ${l.severity}">${l.severity}</span></div>
+      <div class="msg ${l.tampered ? 'tampered' : ''}" title="${l.message.replace(/"/g,'&quot;')}">${l.tampered ? '⚠ ' : ''}${l.message}</div>
+      <div class="row-actions">
+        <button class="small" onclick="openVerify(${l.log_id})">Verify</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function refreshIncidents(){
+  const incidents = await api('/api/incidents?limit=20');
+  const list = document.getElementById('incidents-list');
+  document.getElementById('incident-count').textContent = incidents.length;
+  if(!incidents.length){ list.innerHTML = '<div class="empty">No incidents yet.</div>'; return; }
+  list.innerHTML = incidents.map(inc => {
+    const detail = inc.detail.split('. ')[0];
+    return `
+    <div class="incident">
+      <div class="incident-top">
+        <div class="incident-type">${inc.attack_type}</div>
+        <span class="badge ${inc.severity}">${inc.severity}</span>
+      </div>
+      <div class="incident-mitre">${detail}</div>
+      <div class="incident-meta"><span>${inc.device}</span><span>${fmtTime(inc.created_at)}</span><span>${inc.status}</span></div>
+    </div>`;
+  }).join('');
+}
+
+async function refreshStats(){
+  const s = await api('/api/dashboard/stats');
+  const devices = await api('/api/devices');
+  document.getElementById('stat-logs').textContent = s.total_logs;
+  document.getElementById('stat-blocks').textContent = s.block_count;
+  document.getElementById('stat-incidents').textContent = s.open_incidents;
+  document.getElementById('stat-devices').textContent = devices.length;
+  document.getElementById('pending-count').textContent = s.pending_logs;
+
+  const sevOrder = ['critical','high','medium','info'];
+  const sevBars = document.getElementById('sev-bars');
+  const total = Object.values(s.severity_breakdown).reduce((a,b)=>a+b,0) || 1;
+  sevBars.innerHTML = sevOrder.map(sev => {
+    const n = s.severity_breakdown[sev] || 0;
+    const pct = Math.round((n/total)*100);
+    const color = SEV_COLOR[sev] || 'var(--text-dim)';
+    return `<div class="sev-bar-row">
+      <div class="lbl">${sev}</div>
+      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+      <div class="n">${n}</div>
+    </div>`;
+  }).join('');
+}
+
+async function refreshAll(){
+  await Promise.all([refreshLedger(), refreshLogs(), refreshIncidents(), refreshStats()]);
+}
+
+async function openVerify(logId){
+  const overlay = document.getElementById('overlay');
+  const body = document.getElementById('modal-body');
+  document.getElementById('modal-sub').textContent = `log #${logId}`;
+  body.innerHTML = '<div class="empty">Verifying against ledger…</div>';
+  overlay.classList.add('show');
+
+  const v = await api(`/api/logs/${logId}/verify`);
+  const pass = v.verified;
+  body.innerHTML = `
+    <div class="verdict-banner ${pass ? 'pass':'fail'}">${pass ? '✓' : '✕'} ${v.verdict}</div>
+    <div class="kv"><div class="k">Stored hash</div><div class="v">${v.stored_hash}</div></div>
+    <div class="kv"><div class="k">Recomputed hash (now)</div><div class="v ${v.content_matches_stored_hash?'match':'mismatch'}">${v.recomputed_hash_from_current_content}</div></div>
+    <div class="kv"><div class="k">Content matches</div><div class="v ${v.content_matches_stored_hash?'match':'mismatch'}">${v.content_matches_stored_hash}</div></div>
+    <div class="kv"><div class="k">Committed in block</div><div class="v">${v.block_index !== null ? '#'+v.block_index : 'pending (not yet mined)'}</div></div>
+    <div class="kv"><div class="k">Hash present in block</div><div class="v ${v.hash_present_in_block?'match':'mismatch'}">${v.hash_present_in_block}</div></div>
+    <div class="kv"><div class="k">Full chain valid</div><div class="v ${v.full_chain_valid?'match':'mismatch'}">${v.full_chain_valid}</div></div>
+    <div class="modal-actions">
+      <button class="danger" onclick="tamperLog(${logId})">Simulate attacker tamper</button>
+      <button onclick="openVerify(${logId})">Re-verify</button>
+    </div>
+  `;
+}
+
+async function tamperLog(logId){
+  await api(`/api/logs/${logId}/tamper`, {method:'POST'});
+  toast(`Log #${logId} altered directly in the database (simulated attacker).`, true);
+  await refreshLogs();
+  await openVerify(logId);
+}
+
+document.getElementById('modal-close').onclick = () => document.getElementById('overlay').classList.remove('show');
+document.getElementById('overlay').onclick = (e) => { if(e.target.id==='overlay') e.currentTarget.classList.remove('show'); };
+
+document.getElementById('btn-ingest').onclick = () => ingestBatch(0.3);
+document.getElementById('btn-mine').onclick = forceMine;
+document.getElementById('btn-auto').onclick = (e) => {
+  if(autoTimer){
+    clearInterval(autoTimer); autoTimer = null;
+    e.target.textContent = '▶ Auto-generate traffic'; e.target.classList.remove('toggled');
+  } else {
+    ingestBatch(0.3);
+    autoTimer = setInterval(() => ingestBatch(0.3), 4000);
+    e.target.textContent = '■ Stop auto-generate'; e.target.classList.add('toggled');
+  }
+};
+
+refreshAll();
+setInterval(refreshAll, 8000);
+</script>
+
+</body>
+</html>
